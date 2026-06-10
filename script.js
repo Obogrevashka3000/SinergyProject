@@ -1,6 +1,6 @@
 // === КОНФИГУРАЦИЯ API ===
-const API_KEY = "$2a$10$t8OwzcPC15G2DUHMF3zKq.trH3nb4jzkf7c.JYyEM0GqZbiW9WB4m";
-const BIN_ID = "6a2942d9da38895dfea5ec5a";
+const API_KEY = "$2a$10$6A8RvTXoUaKzs5asgixFCO26ZXJs1/6lmoOldhiuHg4Z8e1WMyCvC";
+const BIN_ID = "6a294677da38895dfea5fd35";
 
 const GET_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}/latest`;
 const PUT_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
