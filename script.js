@@ -1,5 +1,5 @@
 // === КОНФИГУРАЦИЯ API ===
-const API_KEY = "$2a$10$6A8RvTXoUaKzs5asgixFCO26ZXJs1/6lmoOldhiuHg4Z8e1WMyCvC";
+const API_KEY = "$2a$10$t8OwzcPC15G2DUHMF3zKq.trH3nb4jzkf7c.JYyEM0GqZbiW9WB4m";
 const BIN_ID = "6a294677da38895dfea5fd35";
 
 const GET_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}/latest`;
@@ -59,16 +59,28 @@ async function initSite() {
     await refreshData();
 }
 
-// === РАБОТА С БИНОМ (БЕЗОПАСНАЯ) ===
+// === УЛУЧШЕННАЯ РАБОТА С БИНОМ ===
 async function fetchData() {
     try {
         const res = await fetch(GET_URL, {
             headers: { 'X-Access-Key': API_KEY }
         });
+        
+        // Если ответ не успешный (например, 401, 404) или не JSON
         if (!res.ok) {
-            console.warn('⚠️ Ошибка при чтении бина:', res.status);
+            const text = await res.text();
+            console.warn(`⚠️ Ошибка при чтении бина (${res.status}):`, text);
+            // Возвращаем пустую структуру, чтобы сайт не упал
             return { users: [], tickets: [], next_ticket_id: 1 };
         }
+
+        const contentType = res.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            const text = await res.text();
+            console.error('❌ Сервер вернул не JSON, а:', text.substring(0, 200));
+            return { users: [], tickets: [], next_ticket_id: 1 };
+        }
+
         const data = await res.json();
         if (!data.record) {
             const defaultData = { users: [], tickets: [], next_ticket_id: 1 };
@@ -95,7 +107,13 @@ async function updateBin(newData) {
             },
             body: JSON.stringify(newData)
         });
-        return res.ok;
+
+        if (!res.ok) {
+            const text = await res.text();
+            console.warn(`⚠️ Ошибка при записи (${res.status}):`, text);
+            return false;
+        }
+        return true;
     } catch (e) {
         console.error('Ошибка updateBin:', e);
         return false;
@@ -104,9 +122,15 @@ async function updateBin(newData) {
 
 async function refreshData() {
     const data = await fetchData();
-    allUsers = data.users || [];
-    tickets = data.tickets || [];
-    if (!data.next_ticket_id) data.next_ticket_id = 1;
+    if (data && typeof data === 'object') {
+        allUsers = data.users || [];
+        tickets = data.tickets || [];
+        if (!data.next_ticket_id) data.next_ticket_id = 1;
+    } else {
+        // Если данные пришли не те
+        allUsers = [];
+        tickets = [];
+    }
     renderTickets();
     if (currentUser && isAdmin(currentUser.role)) {
         renderAdminPanel();
@@ -124,6 +148,12 @@ async function handleLogin(e) {
     const password = document.getElementById('loginPassword').value;
 
     const data = await fetchData();
+    // Проверяем, что data.users существует
+    if (!data || !data.users) {
+        document.getElementById('loginError').textContent = 'Ошибка соединения с базой.';
+        return;
+    }
+
     const user = data.users.find(u => u.username === username && u.password === password);
 
     if (user) {
@@ -159,6 +189,12 @@ async function handleRegister(e) {
     }
 
     const data = await fetchData();
+    // Проверка
+    if (!data || !data.users) {
+        document.getElementById('registerError').textContent = 'Ошибка соединения с базой.';
+        return;
+    }
+
     if (data.users.find(u => u.username === username)) {
         document.getElementById('registerError').textContent = 'Пользователь уже существует.';
         return;
@@ -213,7 +249,7 @@ function logoutUser() {
 // === ФОРУМ ===
 function renderTickets() {
     const container = document.getElementById('ticketList');
-    if (!tickets.length) {
+    if (!tickets || tickets.length === 0) {
         container.innerHTML = '<p style="color:#666; text-align:center;">Тикетов пока нет.</p>';
         return;
     }
@@ -249,6 +285,11 @@ async function handleCreateTicket(e) {
     if (!title || !desc) return alert('Заполните все поля.');
 
     const data = await fetchData();
+    if (!data || !data.tickets) {
+        alert('Ошибка при получении данных.');
+        return;
+    }
+
     const ticket = {
         id: data.next_ticket_id || 1,
         author: currentUser.username,
@@ -260,15 +301,22 @@ async function handleCreateTicket(e) {
     };
     data.tickets.push(ticket);
     data.next_ticket_id = (data.next_ticket_id || 1) + 1;
-    await updateBin(data);
-    closeModal('ticketModal');
-    document.getElementById('ticketForm').reset();
-    await refreshData();
+    
+    const success = await updateBin(data);
+    if (success) {
+        closeModal('ticketModal');
+        document.getElementById('ticketForm').reset();
+        await refreshData();
+        alert('✅ Тикет создан!');
+    } else {
+        alert('❌ Ошибка при создании тикета.');
+    }
 }
 
 async function closeTicket(id) {
     if (!confirm('Закрыть тикет?')) return;
     const data = await fetchData();
+    if (!data || !data.tickets) return;
     const ticket = data.tickets.find(t => t.id === id);
     if (ticket) ticket.status = 'closed';
     await updateBin(data);
@@ -278,6 +326,7 @@ async function closeTicket(id) {
 async function deleteTicket(id) {
     if (!confirm('Удалить тикет?')) return;
     const data = await fetchData();
+    if (!data || !data.tickets) return;
     data.tickets = data.tickets.filter(t => t.id !== id);
     await updateBin(data);
     await refreshData();
@@ -286,6 +335,10 @@ async function deleteTicket(id) {
 // === АДМИН ПАНЕЛЬ ===
 async function renderAdminPanel() {
     const container = document.getElementById('adminUserList');
+    if (!allUsers || allUsers.length === 0) {
+        container.innerHTML = '<p style="color:#666;">Пользователей пока нет.</p>';
+        return;
+    }
     container.innerHTML = allUsers.map(u => `
         <div class="admin-user">
             <div class="user-info">
@@ -317,6 +370,7 @@ async function loadAdminData() {
 async function deleteUser(username) {
     if (!confirm(`Удалить пользователя ${username}?`)) return;
     const data = await fetchData();
+    if (!data || !data.users) return;
     data.users = data.users.filter(u => u.username !== username);
     await updateBin(data);
     await refreshData();
@@ -324,6 +378,7 @@ async function deleteUser(username) {
 
 async function changeRole(username, newRole) {
     const data = await fetchData();
+    if (!data || !data.users) return;
     const user = data.users.find(u => u.username === username);
     if (user) {
         user.role = newRole;
@@ -334,6 +389,7 @@ async function changeRole(username, newRole) {
 
 async function muteUser(username, duration) {
     const data = await fetchData();
+    if (!data || !data.users) return;
     const user = data.users.find(u => u.username === username);
     if (!user) return;
     let until = null;
