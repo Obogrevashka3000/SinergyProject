@@ -1,15 +1,14 @@
-// ==========================================
-// 1. КОНФИГУРАЦИЯ
-// ==========================================
-const PROXY_URL = 'https://sinergyproject.vercel.app/api/proxy?path=latest';
-const PROXY_WRITE = 'https://sinergyproject.vercel.app/api/proxy?path=';
+// === КОНФИГУРАЦИЯ API ===
+const API_KEY = "$2a$10$6A8RvTXoUaKzs5asgixFCO26ZXJs1/6lmoOldhiuHg4Z8e1WMyCvC";
+const BIN_ID = "6a294677da38895dfea5fd35";
 
-// ==========================================
-// 2. ДАННЫЕ MOG
-// ==========================================
+const GET_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}/latest`;
+const PUT_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
+
+// === ДАННЫЕ MOG ===
 const mogData = [
-    { id: 'nu-7', name: 'Ню-7', alias: '"Удар молота"', spec: 'Анти-аномалии', desc: 'Специализируется на зачистке и сдерживании аномалий.', img: 'img/Nu-7.png' },
-    { id: 'epsilon-11', name: 'Эпсилон-11', alias: '"Девятихвостая лиса"', spec: 'Уничтожение аномалий', desc: 'Элитное подразделение Фонда.', img: 'img/Epsilon-11.png' },
+    { id: 'nu-7', name: 'Ню-7', alias: '"Удар молота"', spec: 'Анти-аномалии', desc: 'Специализируется на зачистке и сдерживании аномалий в условиях высокого риска.', img: 'img/Nu-7.png' },
+    { id: 'epsilon-11', name: 'Эпсилон-11', alias: '"Девятихвостая лиса"', spec: 'Уничтожение аномалий', desc: 'Элитное подразделение Фонда, обученное специальным протоколам.', img: 'img/Epsilon-11.png' },
     { id: 'omega-1', name: 'Омега-1', alias: '"Буйца Закона"', spec: 'Сдерживание', desc: 'Боевая единица для протоколов высшей секретности.', img: 'img/Omega-1.png' },
     { id: 'beta-777', name: 'Бета-777', alias: '"Копье Гекаты"', spec: 'Паранормальные расследования', desc: 'Поиск аномалий, связанных с мистикой.', img: 'img/Beta-777.png' },
     { id: 'beta-7', name: 'Бета-7', alias: '"Шляпные болванчики"', spec: 'Биологические аномалии', desc: 'Специализация: захват биологических аномалий.', img: 'img/Beta-7.png' },
@@ -24,75 +23,7 @@ let currentUser = null;
 let allUsers = [];
 let tickets = [];
 
-// ==========================================
-// 3. БАЗОВЫЕ ФУНКЦИИ (JSONBIN ЧЕРЕЗ ПРОКСИ)
-// ==========================================
-async function jsonRequest(method, path, body = null) {
-    const url = method === 'PUT' 
-        ? `${PROXY_WRITE}${path}` 
-        : PROXY_URL;
-    const options = {
-        method,
-        headers: { 'Content-Type': 'application/json' }
-    };
-    if (body) options.body = JSON.stringify(body);
-    const res = await fetch(url, options);
-    return res.json();
-}
-
-async function fetchData(path = null) {
-    try {
-        const data = await jsonRequest('GET', 'latest');
-        if (!data.record) {
-            const defaultData = { users: [], tickets: [], next_ticket_id: 1 };
-            await updateBin(defaultData);
-            return path ? null : defaultData;
-        }
-        if (path) {
-            return data.record[path] || null;
-        }
-        if (!data.record.users) data.record.users = [];
-        if (!data.record.tickets) data.record.tickets = [];
-        if (!data.record.next_ticket_id) data.record.next_ticket_id = 1;
-        return data.record;
-    } catch (e) {
-        console.error('❌ Ошибка fetchData:', e);
-        return path ? null : { users: [], tickets: [], next_ticket_id: 1 };
-    }
-}
-
-async function updateBin(newData) {
-    try {
-        await jsonRequest('PUT', '', newData);
-        return true;
-    } catch (e) {
-        console.error('❌ Ошибка при записи:', e);
-        return false;
-    }
-}
-
-async function refreshData() {
-    const data = await fetchData();
-    if (data) {
-        allUsers = data.users || [];
-        tickets = data.tickets || [];
-        if (!data.next_ticket_id) data.next_ticket_id = 1;
-    }
-    renderTickets();
-    if (currentUser && isAdmin(currentUser.role)) {
-        renderAdminPanel();
-    }
-}
-
-// ==========================================
-// 4. РОЛИ
-// ==========================================
-function isAdmin(role) { return role === 'admin' || role === 'superadmin'; }
-function isSuperAdmin(role) { return role === 'superadmin'; }
-
-// ==========================================
-// 5. ЗАГРУЗКА И ИНИЦИАЛИЗАЦИЯ
-// ==========================================
+// === ЗАГРУЗКА ===
 document.addEventListener('DOMContentLoaded', () => {
     const video = document.getElementById('bgVideo');
     const enterBtn = document.getElementById('enterBtn');
@@ -109,21 +40,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+// === ИНИЦИАЛИЗАЦИЯ ===
 async function initSite() {
     const stored = localStorage.getItem('rpUser');
     if (stored) {
         currentUser = JSON.parse(stored);
-        // Проверяем, что пользователь существует
-        const users = await fetchData('users');
-        const found = users?.find(u => u.username === currentUser.username);
-        if (found) {
-            currentUser = found;
-            localStorage.setItem('rpUser', JSON.stringify(currentUser));
-            showProfile(currentUser);
-        } else {
-            localStorage.removeItem('rpUser');
-            showLoginButtons();
-        }
+        showProfile(currentUser);
     } else {
         showLoginButtons();
     }
@@ -137,25 +59,81 @@ async function initSite() {
     await refreshData();
 }
 
-// ==========================================
-// 6. АВТОРИЗАЦИЯ
-// ==========================================
+// === РАБОТА С БИНОМ (БЕЗОПАСНАЯ) ===
+async function fetchData() {
+    try {
+        const res = await fetch(GET_URL, {
+            headers: { 'X-Access-Key': API_KEY }
+        });
+        if (!res.ok) {
+            console.warn('⚠️ Ошибка при чтении бина:', res.status);
+            return { users: [], tickets: [], next_ticket_id: 1 };
+        }
+        const data = await res.json();
+        if (!data.record) {
+            const defaultData = { users: [], tickets: [], next_ticket_id: 1 };
+            await updateBin(defaultData);
+            return defaultData;
+        }
+        if (!data.record.users) data.record.users = [];
+        if (!data.record.tickets) data.record.tickets = [];
+        if (!data.record.next_ticket_id) data.record.next_ticket_id = 1;
+        return data.record;
+    } catch (e) {
+        console.error('❌ Ошибка сети/API:', e);
+        return { users: [], tickets: [], next_ticket_id: 1 };
+    }
+}
+
+async function updateBin(newData) {
+    try {
+        const res = await fetch(PUT_URL, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Master-Key': API_KEY
+            },
+            body: JSON.stringify(newData)
+        });
+        return res.ok;
+    } catch (e) {
+        console.error('Ошибка updateBin:', e);
+        return false;
+    }
+}
+
+async function refreshData() {
+    const data = await fetchData();
+    allUsers = data.users || [];
+    tickets = data.tickets || [];
+    if (!data.next_ticket_id) data.next_ticket_id = 1;
+    renderTickets();
+    if (currentUser && isAdmin(currentUser.role)) {
+        renderAdminPanel();
+    }
+}
+
+// === РОЛИ ===
+function isAdmin(role) { return role === 'admin' || role === 'superadmin'; }
+function isSuperAdmin(role) { return role === 'superadmin'; }
+
+// === АВТОРИЗАЦИЯ ===
 async function handleLogin(e) {
     e.preventDefault();
     const username = document.getElementById('loginUsername').value.trim();
     const password = document.getElementById('loginPassword').value;
 
-    const users = await fetchData('users');
-    const user = users?.find(u => u.username === username && u.password === password);
+    const data = await fetchData();
+    const user = data.users.find(u => u.username === username && u.password === password);
 
     if (user) {
         if (user.muted_until && new Date(user.muted_until) > new Date()) {
             document.getElementById('loginError').textContent = `Вы замучены до ${new Date(user.muted_until).toLocaleString()}`;
             return;
         }
-        currentUser = user;
-        localStorage.setItem('rpUser', JSON.stringify(user));
-        showProfile(user);
+        currentUser = { username: user.username, role: user.role, muted_until: user.muted_until };
+        localStorage.setItem('rpUser', JSON.stringify(currentUser));
+        showProfile(currentUser);
         closeModal('loginModal');
         document.getElementById('loginForm').reset();
         await refreshData();
@@ -180,20 +158,18 @@ async function handleRegister(e) {
         return;
     }
 
-    const users = await fetchData('users');
-    if (users?.find(u => u.username === username)) {
+    const data = await fetchData();
+    if (data.users.find(u => u.username === username)) {
         document.getElementById('registerError').textContent = 'Пользователь уже существует.';
         return;
     }
 
-    const newUser = { username, password, role: 'user', muted_until: null };
-    users.push(newUser);
-    const success = await updateBin({ users, tickets: tickets || [], next_ticket_id: 1 });
+    data.users.push({ username, password, role: 'user', muted_until: null });
+    const success = await updateBin(data);
     if (success) {
         alert('Регистрация успешна!');
         closeModal('registerModal');
         document.getElementById('registerForm').reset();
-        await refreshData();
     } else {
         document.getElementById('registerError').textContent = 'Ошибка сервера.';
     }
@@ -234,12 +210,10 @@ function logoutUser() {
     location.reload();
 }
 
-// ==========================================
-// 7. ФОРУМ (тикеты)
-// ==========================================
+// === ФОРУМ ===
 function renderTickets() {
     const container = document.getElementById('ticketList');
-    if (!tickets || tickets.length === 0) {
+    if (!tickets.length) {
         container.innerHTML = '<p style="color:#666; text-align:center;">Тикетов пока нет.</p>';
         return;
     }
@@ -275,7 +249,7 @@ async function handleCreateTicket(e) {
     if (!title || !desc) return alert('Заполните все поля.');
 
     const data = await fetchData();
-    const newTicket = {
+    const ticket = {
         id: data.next_ticket_id || 1,
         author: currentUser.username,
         title,
@@ -284,17 +258,12 @@ async function handleCreateTicket(e) {
         created_at: new Date().toISOString(),
         comments: []
     };
-    data.tickets.push(newTicket);
+    data.tickets.push(ticket);
     data.next_ticket_id = (data.next_ticket_id || 1) + 1;
-    const success = await updateBin(data);
-    if (success) {
-        closeModal('ticketModal');
-        document.getElementById('ticketForm').reset();
-        await refreshData();
-        alert('✅ Тикет создан!');
-    } else {
-        alert('❌ Ошибка при создании тикета.');
-    }
+    await updateBin(data);
+    closeModal('ticketModal');
+    document.getElementById('ticketForm').reset();
+    await refreshData();
 }
 
 async function closeTicket(id) {
@@ -314,15 +283,9 @@ async function deleteTicket(id) {
     await refreshData();
 }
 
-// ==========================================
-// 8. АДМИН ПАНЕЛЬ
-// ==========================================
+// === АДМИН ПАНЕЛЬ ===
 async function renderAdminPanel() {
     const container = document.getElementById('adminUserList');
-    if (!allUsers || allUsers.length === 0) {
-        container.innerHTML = '<p style="color:#666;">Пользователей пока нет.</p>';
-        return;
-    }
     container.innerHTML = allUsers.map(u => `
         <div class="admin-user">
             <div class="user-info">
@@ -388,9 +351,7 @@ async function muteUser(username, duration) {
     await refreshData();
 }
 
-// ==========================================
-// 9. НАВИГАЦИЯ И МОДАЛЬНЫЕ ОКНА
-// ==========================================
+// === НАВИГАЦИЯ ===
 function showSection(sectionId) {
     const sections = document.querySelectorAll('.content-section');
     sections.forEach(sec => sec.classList.remove('active'));
@@ -410,9 +371,7 @@ function closeModal(id) {
     document.querySelectorAll('.error-message').forEach(el => el.textContent = '');
 }
 
-// ==========================================
-// 10. ИНИЦИАЛИЗАЦИЯ MOG
-// ==========================================
+// === ИНИЦИАЛИЗАЦИЯ MOG ===
 function initMOG() {
     const grid = document.getElementById('mogGrid');
     const tooltip = document.getElementById('mogTooltip');
