@@ -1,16 +1,10 @@
-// === КОНФИГУРАЦИЯ ===
-const BIN_ID = "6a294677da38895dfea5fd35";
-const API_KEY = "$2a$10$6A8RvTXoUaKzs5asgixFCO26ZXJs1/6lmoOldhiuHg4Z8e1WMyCvC";
-
-// Прокси для обхода CORS на GitHub Pages
-const CORS_PROXY = "https://corsproxy.io/?";
-const GET_URL = `${CORS_PROXY}${encodeURIComponent(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`)}`;
-const PUT_URL = `${CORS_PROXY}${encodeURIComponent(`https://api.jsonbin.io/v3/b/${BIN_ID}`)}`;
+// === КОНФИГУРАЦИЯ ПРОКСИ НА VERCEl ===
+const PROXY_BASE = 'https://sinergyproject.vercel.app/api/proxy';
 
 // === ДАННЫЕ MOG ===
 const mogData = [
-    { id: 'nu-7', name: 'Ню-7', alias: '"Удар молота"', spec: 'Анти-аномалии', desc: 'Специализируется на зачистке и сдерживании аномалий в условиях высокого риска.', img: 'img/Nu-7.png' },
-    { id: 'epsilon-11', name: 'Эпсилон-11', alias: '"Девятихвостая лиса"', spec: 'Уничтожение аномалий', desc: 'Элитное подразделение Фонда, обученное специальным протоколам.', img: 'img/Epsilon-11.png' },
+    { id: 'nu-7', name: 'Ню-7', alias: '"Удар молота"', spec: 'Анти-аномалии', desc: 'Специализируется на зачистке и сдерживании аномалий.', img: 'img/Nu-7.png' },
+    { id: 'epsilon-11', name: 'Эпсилон-11', alias: '"Девятихвостая лиса"', spec: 'Уничтожение аномалий', desc: 'Элитное подразделение Фонда.', img: 'img/Epsilon-11.png' },
     { id: 'omega-1', name: 'Омега-1', alias: '"Буйца Закона"', spec: 'Сдерживание', desc: 'Боевая единица для протоколов высшей секретности.', img: 'img/Omega-1.png' },
     { id: 'beta-777', name: 'Бета-777', alias: '"Копье Гекаты"', spec: 'Паранормальные расследования', desc: 'Поиск аномалий, связанных с мистикой.', img: 'img/Beta-777.png' },
     { id: 'beta-7', name: 'Бета-7', alias: '"Шляпные болванчики"', spec: 'Биологические аномалии', desc: 'Специализация: захват биологических аномалий.', img: 'img/Beta-7.png' },
@@ -61,17 +55,21 @@ async function initSite() {
     await refreshData();
 }
 
-// === РАБОТА С БИНОМ ЧЕРЕЗ CORS PROXY ===
+// === РАБОТА С VERCEl PROXY ===
+async function jsonRequest(method, path, body = null) {
+    const url = `${PROXY_BASE}?path=${path}`;
+    const options = {
+        method: method,
+        headers: { 'Content-Type': 'application/json' }
+    };
+    if (body) options.body = JSON.stringify(body);
+    const res = await fetch(url, options);
+    return res.json();
+}
+
 async function fetchData() {
     try {
-        const res = await fetch(GET_URL, {
-            headers: { 'X-Access-Key': API_KEY }
-        });
-        if (!res.ok) {
-            console.warn('⚠️ Ошибка при чтении бина:', res.status);
-            return { users: [], tickets: [], next_ticket_id: 1 };
-        }
-        const data = await res.json();
+        const data = await jsonRequest('GET', 'latest');
         if (!data.record) {
             const defaultData = { users: [], tickets: [], next_ticket_id: 1 };
             await updateBin(defaultData);
@@ -82,24 +80,17 @@ async function fetchData() {
         if (!data.record.next_ticket_id) data.record.next_ticket_id = 1;
         return data.record;
     } catch (e) {
-        console.error('❌ Ошибка сети/API:', e);
+        console.error('❌ Ошибка fetchData:', e);
         return { users: [], tickets: [], next_ticket_id: 1 };
     }
 }
 
 async function updateBin(newData) {
     try {
-        const res = await fetch(PUT_URL, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Master-Key': API_KEY
-            },
-            body: JSON.stringify(newData)
-        });
-        return res.ok;
+        await jsonRequest('PUT', '', newData);
+        return true;
     } catch (e) {
-        console.error('Ошибка updateBin:', e);
+        console.error('❌ Ошибка при записи:', e);
         return false;
     }
 }
@@ -262,10 +253,15 @@ async function handleCreateTicket(e) {
     };
     data.tickets.push(ticket);
     data.next_ticket_id = (data.next_ticket_id || 1) + 1;
-    await updateBin(data);
-    closeModal('ticketModal');
-    document.getElementById('ticketForm').reset();
-    await refreshData();
+    const success = await updateBin(data);
+    if (success) {
+        closeModal('ticketModal');
+        document.getElementById('ticketForm').reset();
+        await refreshData();
+        alert('✅ Тикет создан!');
+    } else {
+        alert('❌ Ошибка при создании тикета.');
+    }
 }
 
 async function closeTicket(id) {
