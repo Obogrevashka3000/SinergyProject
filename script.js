@@ -1,15 +1,22 @@
+// === КОНФИГУРАЦИЯ API ===
+const API_KEY = "$2a$10$t8OwzcPC15G2DUHMF3zKq.trH3nb4jzkf7c.JYyEM0GqZbiW9WB4m";
+const BIN_ID = "6a294677da38895dfea5fd35";
+
+const GET_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}/latest`;
+const PUT_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
+
 // === ДАННЫЕ MOG ===
 const mogData = [
-    { id: 'nu-7', name: 'Ню-7', alias: '"Удар молота"', spec: 'Боевая единица', desc: 'Специализируется на зачистке и сдерживании аномалий в условиях высокого риска.', img: 'img/Nu-7.png' },
+    { id: 'nu-7', name: 'Ню-7', alias: '"Удар молота"', spec: 'Анти-аномалии', desc: 'Специализируется на зачистке и сдерживании аномалий в условиях высокого риска.', img: 'img/Nu-7.png' },
     { id: 'epsilon-11', name: 'Эпсилон-11', alias: '"Девятихвостая лиса"', spec: 'Уничтожение аномалий', desc: 'Элитное подразделение Фонда, обученное специальным протоколам.', img: 'img/Epsilon-11.png' },
-    { id: 'omega-1', name: 'Омега-1', alias: '"Шуйца Закона"', spec: 'Задержание', desc: 'Боевая единица для протоколов высшей секретности.', img: 'img/Omega-1.png' },
-    { id: 'beta-777', name: 'Бета-777', alias: '"Копье Гекаты"', spec: 'Тауматургия', desc: 'Поиск аномалий, связанных с мистикой.', img: 'img/Beta-777.png' },
+    { id: 'omega-1', name: 'Омега-1', alias: '"Буйца Закона"', spec: 'Сдерживание', desc: 'Боевая единица для протоколов высшей секретности.', img: 'img/Omega-1.png' },
+    { id: 'beta-777', name: 'Бета-777', alias: '"Копье Гекаты"', spec: 'Паранормальные расследования', desc: 'Поиск аномалий, связанных с мистикой.', img: 'img/Beta-777.png' },
     { id: 'beta-7', name: 'Бета-7', alias: '"Шляпные болванчики"', spec: 'Биологические аномалии', desc: 'Специализация: захват биологических аномалий.', img: 'img/Beta-7.png' },
-    { id: 'eta-10', name: 'Эта-10', alias: '"Не вижу зла"', spec: 'Меметика', desc: 'Тактическая разведка и наблюдение.', img: 'img/Eta-10.png' },
+    { id: 'eta-10', name: 'Эта-10', alias: '"Не вижу зла"', spec: 'Наблюдение', desc: 'Тактическая разведка и наблюдение.', img: 'img/Eta-10.png' },
     { id: 'eta-11', name: 'Эта-11', alias: '"Дикие твари"', spec: 'Агрессивные аномалии', desc: 'Нейтрализация агрессивных форм жизни.', img: 'img/Eta-11.png' },
     { id: 'gamma-5', name: 'Гамма-5', alias: '"Ловчий след"', spec: 'Поисковые операции', desc: 'Поиск сбежавших аномалий.', img: 'img/Gamma-5.png' },
-    { id: 'mu-13', name: 'Мю-13', alias: '"Охотники за привидениями"', spec: 'Призраки и духи', desc: 'Работа с призраками и внепространственными явлениями.', img: 'img/Mu-13.png' },
-    { id: 'zeta-9', name: 'Дзета-9', alias: '"Кроторьсы"', spec: 'Пространственно-временная', desc: 'Проникновение в зоны с аномальными изменениями пространства.', img: 'img/Zeta-9.png' }
+    { id: 'mu-13', name: 'Мю-13', alias: '"Охотники за привидениями"', spec: 'Парапсихология', desc: 'Работа с призраками и внепространственными явлениями.', img: 'img/Mu-13.png' },
+    { id: 'zeta-9', name: 'Дзета-9', alias: '"Кроторьсы"', spec: 'Туннельные операции', desc: 'Проникновение в зоны с аномальными изменениями пространства.', img: 'img/Zeta-9.png' }
 ];
 
 let currentUser = null;
@@ -34,9 +41,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // === ИНИЦИАЛИЗАЦИЯ ===
 async function initSite() {
-    // Загружаем пользователей из localStorage
-    allUsers = JSON.parse(localStorage.getItem('rpUsers')) || [];
-    
     const stored = localStorage.getItem('rpUser');
     if (stored) {
         currentUser = JSON.parse(stored);
@@ -50,15 +54,61 @@ async function initSite() {
 
     showSection('home');
     initMOG();
-    
-    if (currentUser && isAdmin(currentUser.role)) {
-        renderAdminPanel();
+    await refreshData();
+}
+
+// === РАБОТА С БИНОМ ===
+async function fetchData() {
+    try {
+        console.log("🌐 Запрос к JSONBIN...");
+        const res = await fetch(GET_URL, {
+            headers: { 'X-Access-Key': API_KEY }
+        });
+        if (!res.ok) {
+            console.warn('⚠️ Ошибка при чтении бина:', res.status);
+            return { users: [] };
+        }
+        const data = await res.json();
+        console.log("📦 Данные из бина:", data);
+        if (!data.record) {
+            const defaultData = { users: [] };
+            await updateBin(defaultData);
+            return defaultData;
+        }
+        if (!data.record.users) data.record.users = [];
+        return data.record;
+    } catch (e) {
+        console.error('❌ Ошибка сети/API:', e);
+        return { users: [] };
     }
 }
 
-// === РАБОТА С LOCALSTORAGE ===
-function saveUsers() {
-    localStorage.setItem('rpUsers', JSON.stringify(allUsers));
+async function updateBin(newData) {
+    try {
+        console.log("💾 Сохраняем в JSONBIN...");
+        const res = await fetch(PUT_URL, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Master-Key': API_KEY
+            },
+            body: JSON.stringify(newData)
+        });
+        console.log("✅ Сохранение завершено, статус:", res.status);
+        return res.ok;
+    } catch (e) {
+        console.error('Ошибка updateBin:', e);
+        return false;
+    }
+}
+
+async function refreshData() {
+    const data = await fetchData();
+    allUsers = data.users || [];
+    console.log("👤 Текущие пользователи:", allUsers);
+    if (currentUser && isAdmin(currentUser.role)) {
+        renderAdminPanel();
+    }
 }
 
 // === РОЛИ ===
@@ -71,9 +121,12 @@ async function handleLogin(e) {
     const username = document.getElementById('loginUsername').value.trim();
     const password = document.getElementById('loginPassword').value;
 
-    const user = allUsers.find(u => u.username === username && u.password === password);
+    console.log("🔑 Попытка входа:", username);
+    const data = await fetchData();
+    const user = data.users.find(u => u.username === username && u.password === password);
 
     if (user) {
+        console.log("✅ Пользователь найден:", user);
         if (user.muted_until && new Date(user.muted_until) > new Date()) {
             document.getElementById('loginError').textContent = `Вы замучены до ${new Date(user.muted_until).toLocaleString()}`;
             return;
@@ -83,10 +136,9 @@ async function handleLogin(e) {
         showProfile(currentUser);
         closeModal('loginModal');
         document.getElementById('loginForm').reset();
-        if (isAdmin(currentUser.role)) {
-            renderAdminPanel();
-        }
+        await refreshData();
     } else {
+        console.warn("❌ Пользователь не найден или неверный пароль.");
         document.getElementById('loginError').textContent = 'Неверный логин или пароль.';
     }
 }
@@ -107,16 +159,24 @@ async function handleRegister(e) {
         return;
     }
 
-    if (allUsers.find(u => u.username === username)) {
+    console.log("📝 Регистрация нового пользователя:", username);
+    const data = await fetchData();
+    
+    if (data.users.find(u => u.username === username)) {
         document.getElementById('registerError').textContent = 'Пользователь уже существует.';
         return;
     }
 
-    allUsers.push({ username, password, role: 'user', muted_until: null });
-    saveUsers();
-    alert('Регистрация успешна!');
-    closeModal('registerModal');
-    document.getElementById('registerForm').reset();
+    data.users.push({ username, password, role: 'user', muted_until: null });
+    const success = await updateBin(data);
+    if (success) {
+        alert('Регистрация успешна! Теперь войдите.');
+        closeModal('registerModal');
+        document.getElementById('registerForm').reset();
+        await refreshData();
+    } else {
+        document.getElementById('registerError').textContent = 'Ошибка сервера.';
+    }
 }
 
 function showProfile(user) {
@@ -180,13 +240,15 @@ function renderAdminPanel() {
 }
 
 async function loadAdminData() {
+    await refreshData();
     if (currentUser && isAdmin(currentUser.role)) renderAdminPanel();
 }
 
 function deleteUser(username) {
     if (!confirm(`Удалить пользователя ${username}?`)) return;
     allUsers = allUsers.filter(u => u.username !== username);
-    saveUsers();
+    localStorage.setItem('rpUsers', JSON.stringify(allUsers)); // дополнительная защита
+    updateBin({ users: allUsers });
     renderAdminPanel();
 }
 
@@ -194,7 +256,7 @@ function changeRole(username, newRole) {
     const user = allUsers.find(u => u.username === username);
     if (user) {
         user.role = newRole;
-        saveUsers();
+        updateBin({ users: allUsers });
         renderAdminPanel();
     }
 }
@@ -213,7 +275,7 @@ function muteUser(username, duration) {
         until = d.toISOString();
     }
     user.muted_until = until;
-    saveUsers();
+    updateBin({ users: allUsers });
     renderAdminPanel();
 }
 
