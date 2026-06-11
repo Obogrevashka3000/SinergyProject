@@ -80,6 +80,7 @@ const mogData = [
         img: 'img/Theta-7.png' 
     }
 ];
+
 let currentUser = null;
 let allUsers = [];
 
@@ -308,7 +309,6 @@ async function loadAdminData() {
 function deleteUser(username) {
     if (!confirm(`Удалить пользователя ${username}?`)) return;
     allUsers = allUsers.filter(u => u.username !== username);
-    localStorage.setItem('rpUsers', JSON.stringify(allUsers)); // дополнительная защита
     updateBin({ users: allUsers });
     renderAdminPanel();
 }
