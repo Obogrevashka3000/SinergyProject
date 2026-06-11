@@ -1,27 +1,19 @@
-// === КОНФИГУРАЦИЯ API ===
-const API_KEY = "$2a$10$t8OwzcPC15G2DUHMF3zKq.trH3nb4jzkf7c.JYyEM0GqZbiW9WB4m";
-const BIN_ID = "6a294677da38895dfea5fd35";
-
-const GET_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}/latest`;
-const PUT_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
-
 // === ДАННЫЕ MOG ===
 const mogData = [
-    { id: 'nu-7', name: 'Ню-7', alias: '"Удар молота"', spec: 'Анти-аномалии', desc: 'Специализируется на зачистке и сдерживании аномалий в условиях высокого риска.', img: 'img/Nu-7.png' },
+    { id: 'nu-7', name: 'Ню-7', alias: '"Удар молота"', spec: 'Боевая единица', desc: 'Специализируется на зачистке и сдерживании аномалий в условиях высокого риска.', img: 'img/Nu-7.png' },
     { id: 'epsilon-11', name: 'Эпсилон-11', alias: '"Девятихвостая лиса"', spec: 'Уничтожение аномалий', desc: 'Элитное подразделение Фонда, обученное специальным протоколам.', img: 'img/Epsilon-11.png' },
-    { id: 'omega-1', name: 'Омега-1', alias: '"Буйца Закона"', spec: 'Сдерживание', desc: 'Боевая единица для протоколов высшей секретности.', img: 'img/Omega-1.png' },
-    { id: 'beta-777', name: 'Бета-777', alias: '"Копье Гекаты"', spec: 'Паранормальные расследования', desc: 'Поиск аномалий, связанных с мистикой.', img: 'img/Beta-777.png' },
+    { id: 'omega-1', name: 'Омега-1', alias: '"Шуйца Закона"', spec: 'Задержание', desc: 'Боевая единица для протоколов высшей секретности.', img: 'img/Omega-1.png' },
+    { id: 'beta-777', name: 'Бета-777', alias: '"Копье Гекаты"', spec: 'Тауматургия', desc: 'Поиск аномалий, связанных с мистикой.', img: 'img/Beta-777.png' },
     { id: 'beta-7', name: 'Бета-7', alias: '"Шляпные болванчики"', spec: 'Биологические аномалии', desc: 'Специализация: захват биологических аномалий.', img: 'img/Beta-7.png' },
-    { id: 'eta-10', name: 'Эта-10', alias: '"Не вижу зла"', spec: 'Наблюдение', desc: 'Тактическая разведка и наблюдение.', img: 'img/Eta-10.png' },
+    { id: 'eta-10', name: 'Эта-10', alias: '"Не вижу зла"', spec: 'Меметика', desc: 'Тактическая разведка и наблюдение.', img: 'img/Eta-10.png' },
     { id: 'eta-11', name: 'Эта-11', alias: '"Дикие твари"', spec: 'Агрессивные аномалии', desc: 'Нейтрализация агрессивных форм жизни.', img: 'img/Eta-11.png' },
     { id: 'gamma-5', name: 'Гамма-5', alias: '"Ловчий след"', spec: 'Поисковые операции', desc: 'Поиск сбежавших аномалий.', img: 'img/Gamma-5.png' },
-    { id: 'mu-13', name: 'Мю-13', alias: '"Охотники за привидениями"', spec: 'Парапсихология', desc: 'Работа с призраками и внепространственными явлениями.', img: 'img/Mu-13.png' },
-    { id: 'zeta-9', name: 'Дзета-9', alias: '"Кроторьсы"', spec: 'Туннельные операции', desc: 'Проникновение в зоны с аномальными изменениями пространства.', img: 'img/Zeta-9.png' }
+    { id: 'mu-13', name: 'Мю-13', alias: '"Охотники за привидениями"', spec: 'Призраки и духи', desc: 'Работа с призраками и внепространственными явлениями.', img: 'img/Mu-13.png' },
+    { id: 'zeta-9', name: 'Дзета-9', alias: '"Кроторьсы"', spec: 'Пространственно-временная', desc: 'Проникновение в зоны с аномальными изменениями пространства.', img: 'img/Zeta-9.png' }
 ];
 
 let currentUser = null;
 let allUsers = [];
-let tickets = [];
 
 // === ЗАГРУЗКА ===
 document.addEventListener('DOMContentLoaded', () => {
@@ -42,6 +34,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // === ИНИЦИАЛИЗАЦИЯ ===
 async function initSite() {
+    // Загружаем пользователей из localStorage
+    allUsers = JSON.parse(localStorage.getItem('rpUsers')) || [];
+    
     const stored = localStorage.getItem('rpUser');
     if (stored) {
         currentUser = JSON.parse(stored);
@@ -52,65 +47,18 @@ async function initSite() {
 
     document.getElementById('loginForm').addEventListener('submit', handleLogin);
     document.getElementById('registerForm').addEventListener('submit', handleRegister);
-    document.getElementById('ticketForm').addEventListener('submit', handleCreateTicket);
 
     showSection('home');
     initMOG();
-    await refreshData();
-}
-
-// === РАБОТА С БИНОМ (БЕЗОПАСНАЯ) ===
-async function fetchData() {
-    try {
-        const res = await fetch(GET_URL, {
-            headers: { 'X-Access-Key': API_KEY }
-        });
-        if (!res.ok) {
-            console.warn('⚠️ Ошибка при чтении бина:', res.status);
-            return { users: [], tickets: [], next_ticket_id: 1 };
-        }
-        const data = await res.json();
-        if (!data.record) {
-            const defaultData = { users: [], tickets: [], next_ticket_id: 1 };
-            await updateBin(defaultData);
-            return defaultData;
-        }
-        if (!data.record.users) data.record.users = [];
-        if (!data.record.tickets) data.record.tickets = [];
-        if (!data.record.next_ticket_id) data.record.next_ticket_id = 1;
-        return data.record;
-    } catch (e) {
-        console.error('❌ Ошибка сети/API:', e);
-        return { users: [], tickets: [], next_ticket_id: 1 };
-    }
-}
-
-async function updateBin(newData) {
-    try {
-        const res = await fetch(PUT_URL, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Master-Key': API_KEY
-            },
-            body: JSON.stringify(newData)
-        });
-        return res.ok;
-    } catch (e) {
-        console.error('Ошибка updateBin:', e);
-        return false;
-    }
-}
-
-async function refreshData() {
-    const data = await fetchData();
-    allUsers = data.users || [];
-    tickets = data.tickets || [];
-    if (!data.next_ticket_id) data.next_ticket_id = 1;
-    renderTickets();
+    
     if (currentUser && isAdmin(currentUser.role)) {
         renderAdminPanel();
     }
+}
+
+// === РАБОТА С LOCALSTORAGE ===
+function saveUsers() {
+    localStorage.setItem('rpUsers', JSON.stringify(allUsers));
 }
 
 // === РОЛИ ===
@@ -123,8 +71,7 @@ async function handleLogin(e) {
     const username = document.getElementById('loginUsername').value.trim();
     const password = document.getElementById('loginPassword').value;
 
-    const data = await fetchData();
-    const user = data.users.find(u => u.username === username && u.password === password);
+    const user = allUsers.find(u => u.username === username && u.password === password);
 
     if (user) {
         if (user.muted_until && new Date(user.muted_until) > new Date()) {
@@ -136,7 +83,9 @@ async function handleLogin(e) {
         showProfile(currentUser);
         closeModal('loginModal');
         document.getElementById('loginForm').reset();
-        await refreshData();
+        if (isAdmin(currentUser.role)) {
+            renderAdminPanel();
+        }
     } else {
         document.getElementById('loginError').textContent = 'Неверный логин или пароль.';
     }
@@ -158,21 +107,16 @@ async function handleRegister(e) {
         return;
     }
 
-    const data = await fetchData();
-    if (data.users.find(u => u.username === username)) {
+    if (allUsers.find(u => u.username === username)) {
         document.getElementById('registerError').textContent = 'Пользователь уже существует.';
         return;
     }
 
-    data.users.push({ username, password, role: 'user', muted_until: null });
-    const success = await updateBin(data);
-    if (success) {
-        alert('Регистрация успешна!');
-        closeModal('registerModal');
-        document.getElementById('registerForm').reset();
-    } else {
-        document.getElementById('registerError').textContent = 'Ошибка сервера.';
-    }
+    allUsers.push({ username, password, role: 'user', muted_until: null });
+    saveUsers();
+    alert('Регистрация успешна!');
+    closeModal('registerModal');
+    document.getElementById('registerForm').reset();
 }
 
 function showProfile(user) {
@@ -188,9 +132,6 @@ function showProfile(user) {
     } else {
         document.getElementById('adminPanelLink').style.display = 'none';
     }
-
-    document.getElementById('forumGuestMessage').style.display = 'none';
-    document.getElementById('forumContent').style.display = 'block';
 }
 
 function showLoginButtons() {
@@ -199,8 +140,6 @@ function showLoginButtons() {
     document.getElementById('registerBtn').classList.remove('hidden');
     document.getElementById('logoutBtn').classList.add('hidden');
     document.getElementById('adminPanelLink').style.display = 'none';
-    document.getElementById('forumGuestMessage').style.display = 'block';
-    document.getElementById('forumContent').style.display = 'none';
 }
 
 function logoutUser() {
@@ -210,82 +149,13 @@ function logoutUser() {
     location.reload();
 }
 
-// === ФОРУМ ===
-function renderTickets() {
-    const container = document.getElementById('ticketList');
-    if (!tickets.length) {
-        container.innerHTML = '<p style="color:#666; text-align:center;">Тикетов пока нет.</p>';
+// === АДМИН ПАНЕЛЬ ===
+function renderAdminPanel() {
+    const container = document.getElementById('adminUserList');
+    if (!allUsers || allUsers.length === 0) {
+        container.innerHTML = '<p style="color:#666;">Пользователей пока нет.</p>';
         return;
     }
-    container.innerHTML = tickets.map(t => `
-        <div class="ticket-item">
-            <div class="ticket-info">
-                <div class="ticket-title">${t.title}</div>
-                <div class="ticket-author">${t.author} • ${new Date(t.created_at).toLocaleString()}</div>
-            </div>
-            <div style="display:flex; align-items:center; gap:10px;">
-                <span class="ticket-status ${t.status}">${t.status}</span>
-                <div class="ticket-actions">
-                    ${isAdmin(currentUser?.role) ? `
-                        <button onclick="closeTicket(${t.id})">Закрыть</button>
-                        <button onclick="deleteTicket(${t.id})">Удалить</button>
-                    ` : ''}
-                    <button onclick="openTicket(${t.id})">Открыть</button>
-                </div>
-            </div>
-        </div>
-    `).join('');
-}
-
-function openTicket(id) {
-    alert('Просмотр тикета (функция в разработке).');
-}
-
-async function handleCreateTicket(e) {
-    e.preventDefault();
-    if (!currentUser) return alert('Вы не авторизованы.');
-    const title = document.getElementById('ticketTitle').value.trim();
-    const desc = document.getElementById('ticketDesc').value.trim();
-    if (!title || !desc) return alert('Заполните все поля.');
-
-    const data = await fetchData();
-    const ticket = {
-        id: data.next_ticket_id || 1,
-        author: currentUser.username,
-        title,
-        description: desc,
-        status: 'open',
-        created_at: new Date().toISOString(),
-        comments: []
-    };
-    data.tickets.push(ticket);
-    data.next_ticket_id = (data.next_ticket_id || 1) + 1;
-    await updateBin(data);
-    closeModal('ticketModal');
-    document.getElementById('ticketForm').reset();
-    await refreshData();
-}
-
-async function closeTicket(id) {
-    if (!confirm('Закрыть тикет?')) return;
-    const data = await fetchData();
-    const ticket = data.tickets.find(t => t.id === id);
-    if (ticket) ticket.status = 'closed';
-    await updateBin(data);
-    await refreshData();
-}
-
-async function deleteTicket(id) {
-    if (!confirm('Удалить тикет?')) return;
-    const data = await fetchData();
-    data.tickets = data.tickets.filter(t => t.id !== id);
-    await updateBin(data);
-    await refreshData();
-}
-
-// === АДМИН ПАНЕЛЬ ===
-async function renderAdminPanel() {
-    const container = document.getElementById('adminUserList');
     container.innerHTML = allUsers.map(u => `
         <div class="admin-user">
             <div class="user-info">
@@ -310,31 +180,27 @@ async function renderAdminPanel() {
 }
 
 async function loadAdminData() {
-    await refreshData();
     if (currentUser && isAdmin(currentUser.role)) renderAdminPanel();
 }
 
-async function deleteUser(username) {
+function deleteUser(username) {
     if (!confirm(`Удалить пользователя ${username}?`)) return;
-    const data = await fetchData();
-    data.users = data.users.filter(u => u.username !== username);
-    await updateBin(data);
-    await refreshData();
+    allUsers = allUsers.filter(u => u.username !== username);
+    saveUsers();
+    renderAdminPanel();
 }
 
-async function changeRole(username, newRole) {
-    const data = await fetchData();
-    const user = data.users.find(u => u.username === username);
+function changeRole(username, newRole) {
+    const user = allUsers.find(u => u.username === username);
     if (user) {
         user.role = newRole;
-        await updateBin(data);
-        await refreshData();
+        saveUsers();
+        renderAdminPanel();
     }
 }
 
-async function muteUser(username, duration) {
-    const data = await fetchData();
-    const user = data.users.find(u => u.username === username);
+function muteUser(username, duration) {
+    const user = allUsers.find(u => u.username === username);
     if (!user) return;
     let until = null;
     if (duration === 'forever') {
@@ -347,8 +213,8 @@ async function muteUser(username, duration) {
         until = d.toISOString();
     }
     user.muted_until = until;
-    await updateBin(data);
-    await refreshData();
+    saveUsers();
+    renderAdminPanel();
 }
 
 // === НАВИГАЦИЯ ===
@@ -359,7 +225,6 @@ function showSection(sectionId) {
     if (target) target.classList.add('active');
     closeModal('loginModal');
     closeModal('registerModal');
-    closeModal('ticketModal');
 }
 
 function openModal(id) {
